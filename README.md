@@ -25,15 +25,6 @@ character when one is present.
 
 - A C compiler such as `cc`, GCC or Clang.
 - A POSIX environment providing `read`, `open` and `close`.
-- The project header, `get_next_line.h`.
-
-**Repository note:** the current repository contains the two source files but
-does not include `get_next_line.h`. Restore the original header before using
-the compilation commands below. Both source files include it.
-
-The header must provide the standard declarations required by the sources,
-the `BUFFER_SIZE` definition and the declarations of `get_next_line`,
-`ft_strchr`, `ft_strlen` and `join_string`.
 
 ### Clone
 
@@ -50,6 +41,13 @@ source files:
 
 ```bash
 cc -Wall -Wextra -Werror -D BUFFER_SIZE=42 \
+main.c get_next_line.c get_next_line_utils.c -o gnl_test
+```
+
+Without an explicit buffer size, the header defaults to `42`:
+
+```bash
+cc -Wall -Wextra -Werror \
 main.c get_next_line.c get_next_line_utils.c -o gnl_test
 ```
 
@@ -170,7 +168,7 @@ not distinguish EOF from a read or allocation error.
 
 ---
 
-## Reading Model
+## Algorithm and Design
 
 The function separates reading, line extraction and preservation of the
 remaining data.
@@ -185,6 +183,26 @@ remaining data.
 For example, if one read produces `"Hello\n42\n"`, the first call returns
 `"Hello\n"` and saves `"42\n"`. The next call can return that saved line
 without reading more bytes from the descriptor.
+
+### Why this algorithm?
+
+A fixed-size read buffer separates the size of each I/O request from the
+length of a line. Lines longer than `BUFFER_SIZE` are assembled across
+several reads, while a read containing several lines is preserved for later
+calls.
+
+Reading stops as soon as the saved data contains a newline. This avoids
+loading the entire file before returning the first line, and allows the same
+function to read files and standard input.
+
+The static string retains unread bytes without using global variables or
+moving the file offset backwards with `lseek`. Separate helpers keep reading,
+extraction and remainder management easy to follow.
+
+This string-based approach favors simplicity. Each append allocates a new
+string and copies the accumulated data, so a very long line read with a small
+buffer can require quadratic total copying. It is not an optimized
+growable-buffer implementation.
 
 ### Static state
 
@@ -240,7 +258,7 @@ that the implementation is leak-free under every failure condition.
 | `get_next_line.c` | Main function and reading, extraction and remainder helpers. |
 | `get_next_line_utils.c` | Newline detection, string length and string joining. |
 | `README.md` | Project overview, usage and implementation notes. |
-| `get_next_line.h` | Required header; currently absent from the repository. |
+| `get_next_line.h` | Include guard, standard headers, default buffer size and function declarations. |
 
 No Makefile, test driver or multiple-descriptor bonus implementation is
 included in the current repository.
@@ -249,7 +267,7 @@ included in the current repository.
 
 ## Testing
 
-After restoring the header and compiling the example, useful checks include:
+After compiling the example, useful checks include:
 
 | Case | Expected behavior |
 |---|---|
@@ -277,8 +295,13 @@ norminette get_next_line.c get_next_line_utils.c get_next_line.h
 valgrind --leak-check=full --show-leak-kinds=all ./gnl_test text.txt
 ```
 
-These are suggested validation commands, not a claim that all checks have
-already passed on the current repository.
+Compilation and functional checks were performed with the default buffer size
+and explicit sizes `1`, `4`, `42`, `1024` and `9999`, using files and
+standard input. Checks covered empty input, blank lines, multiple lines,
+long lines, missing trailing newlines and invalid descriptors.
+
+Norminette, Valgrind and allocation-failure injection are separate checks;
+the functional checks do not establish that every failure path is correct.
 
 ---
 
@@ -294,7 +317,26 @@ man 3 malloc
 man 3 free
 ```
 
-Other references include the Get Next Line subject and the 42 Norm.
+Other references include the Get Next Line subject (version 14.0) and the
+42 Norm.
+
+### Project constraints
+
+- The implementation uses only `read`, `malloc` and `free` as external
+  functions.
+- `libft`, `lseek` and global variables are prohibited.
+- Compilation must work with and without `-D BUFFER_SIZE=n`.
+- Binary input and changes to an input file between calls before EOF have
+  undefined behavior under the subject.
+
+The usage example is an external test driver; its calls to `open`, `close`
+and `printf` are not part of the submitted function.
+
+### Optional bonus
+
+The bonus requires one static variable and independent reading state for
+multiple file descriptors, supplied in separate `_bonus.c` and `_bonus.h`
+files. This repository contains the mandatory implementation only.
 
 ---
 
@@ -310,7 +352,8 @@ As described in the original README, AI was used to understand these concepts
 without directly generating the final implementation.
 
 AI assistance was also used to revise this documentation, correct the usage
-examples and describe the implementation from the source files.
+examples, describe the algorithm and reconstruct the missing header from the
+existing source declarations. The two C source files were not changed.
 
 ---
 
